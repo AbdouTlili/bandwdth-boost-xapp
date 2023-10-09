@@ -1,0 +1,255 @@
+#include "../../../../src/xApp/e42_xapp_api.h"
+#include "../../../../src/util/alg_ds/alg/defer.h"
+#include "../../../../src/util/time_now_us.h"
+#include "../../../../src/sm/rc_sm/ie/ir/ran_param_struct.h"
+#include "../../../../src/sm/rc_sm/ie/ir/ran_param_list.h"
+#include "../../../../src/util/alg_ds/ds/lock_guard/lock_guard.h"
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <time.h>
+#include <unistd.h>
+#include <stdint.h>
+#include <utils.h>
+
+
+static
+ue_id_e2sm_t ue_id;
+
+static
+pthread_mutex_t mtx;
+
+#define MAX_UEs  5
+
+static 
+uint32_t UEs_list[MAX_UEs];
+static uint8_t UEs_list_len = 0 ;
+static current_mcs = 9;
+
+int lookup_ue(uint32_t UE_list[],uint8_t list_len, uint32_t rnti){
+  int found = 0;
+  for (int i = 0; i < list_len ; i++) {
+          if (UE_list[i] == rnti) {
+              found = 1;
+              break;
+          }
+  }
+  return found;
+}
+
+
+static
+e2sm_rc_ctrl_hdr_frmt_1_t gen_rc_ctrl_hdr_frmt_1(void)
+{
+  e2sm_rc_ctrl_hdr_frmt_1_t dst = {0};
+
+  // 6.2.2.6
+  {
+  lock_guard(&mtx);
+  dst.ue_id = cp_ue_id_e2sm(&ue_id);
+  }
+  // CONTROL Service Style 1: 
+  dst.ric_style_type = 1;
+
+  // mapping conf 
+  dst.ctrl_act_id = 2 ;
+
+  return dst;
+}
+
+static
+e2sm_rc_ctrl_hdr_t gen_rc_ctrl_hdr(void)
+{
+  e2sm_rc_ctrl_hdr_t dst = {0};
+  
+  dst.format = FORMAT_1_E2SM_RC_CTRL_HDR;
+  dst.frmt_1 = gen_rc_ctrl_hdr_frmt_1();
+  return dst;
+}
+
+static
+e2sm_rc_ctrl_msg_frmt_1_t gen_rc_ctrl_msg_frmt_1_qos_flow_map(uint32_t rnti,unsigned long int nb_prb )
+{
+ e2sm_rc_ctrl_msg_frmt_1_t dst = {0}; 
+
+
+  // 8.4.2.2  mapping configuration
+  dst.sz_ran_param = 2;
+  dst.ran_param = calloc(2, sizeof(seq_ran_param_t));
+  assert(dst.ran_param != NULL && "Memory exhausted");
+
+  dst.ran_param[0].ran_param_id = (uint32_t)rnti;
+  dst.ran_param[0].ran_param_val.type = ELEMENT_KEY_FLAG_TRUE_RAN_PARAMETER_VAL_TYPE;
+  dst.ran_param[0].ran_param_val.flag_true = calloc(1, sizeof(ran_parameter_value_t)) ;
+  assert(dst.ran_param[0].ran_param_val.flag_true != NULL && "Memory exhausted");
+  
+  // 
+  dst.ran_param[0].ran_param_val.flag_true->type = INTEGER_RAN_PARAMETER_VALUE; 
+  dst.ran_param[0].ran_param_val.flag_true->int_ran = (int64_t) nb_prb; 
+
+
+
+  // THIS IS JUST A PLACE HOLDER JUST TO USE THE RC WITHOUT FURTHER MODIFICATION 
+  // WILL BE CLEANED/DELETED LATER
+  {
+  // List of QoS Flows to be modified in DRB
+  dst.ran_param[1].ran_param_id = 4;
+  dst.ran_param[1].ran_param_val.type = LIST_RAN_PARAMETER_VAL_TYPE;
+  dst.ran_param[1].ran_param_val.lst = calloc(1, sizeof(ran_param_list_t));
+  assert(dst.ran_param[1].ran_param_val.lst != NULL && "Memory exhausted");
+  ran_param_list_t* rpl = dst.ran_param[1].ran_param_val.lst;
+
+  rpl->sz_lst_ran_param = 1; 
+  rpl->lst_ran_param = calloc(1, sizeof(lst_ran_param_t));
+  assert(rpl->lst_ran_param != NULL && "Memory exhausted");
+
+  // QoS Flow Item
+  rpl->lst_ran_param[0].ran_param_id = 4; 
+  rpl->lst_ran_param[0].ran_param_struct.sz_ran_param_struct = 2;
+  rpl->lst_ran_param[0].ran_param_struct.ran_param_struct = calloc(2, sizeof(seq_ran_param_t));
+  assert(rpl->lst_ran_param[0].ran_param_struct.ran_param_struct != NULL && "Memory exhausted");
+  seq_ran_param_t* rps = rpl->lst_ran_param[0].ran_param_struct.ran_param_struct ;
+
+  // QoS Flow Identifier
+  rps[0].ran_param_id = 2;
+  rps[0].ran_param_val.type = ELEMENT_KEY_FLAG_TRUE_RAN_PARAMETER_VAL_TYPE;
+  rps[0].ran_param_val.flag_true = calloc(1, sizeof(ran_parameter_value_t));
+  assert(rps[0].ran_param_val.flag_true != NULL && "Memory exhausted");
+  rps[0].ran_param_val.flag_true->type = INTEGER_RAN_PARAMETER_VALUE; 
+  // Let's suppose that we have QFI 10
+  rps[0].ran_param_val.flag_true->int_ran = 10; 
+
+  // QoS Flow Mapping Indication
+  rps[1].ran_param_id = 3;
+  rps[1].ran_param_val.type = ELEMENT_KEY_FLAG_FALSE_RAN_PARAMETER_VAL_TYPE; 
+  rps[1].ran_param_val.flag_false = calloc(1, sizeof(ran_parameter_value_t));
+  assert(rps[1].ran_param_val.flag_false != NULL && "Memory exhausted"); 
+
+  // ENUMERATED (ul, dl, ...) 
+  rps[1].ran_param_val.flag_false->type = INTEGER_RAN_PARAMETER_VALUE;
+  rps[1].ran_param_val.flag_false->int_ran = 1; 
+  }
+
+  return dst;
+}
+
+static
+e2sm_rc_ctrl_msg_t gen_rc_ctrl_msg(uint32_t rnti,unsigned long int nb_prb)
+{
+  e2sm_rc_ctrl_msg_t dst = {0}; 
+
+  // 
+  dst.format = FORMAT_1_E2SM_RC_CTRL_MSG;
+  //dst.frmt_1 = gen_rc_ctrl_msg_frmt_1();
+  dst.frmt_1 = gen_rc_ctrl_msg_frmt_1_qos_flow_map(rnti,nb_prb);
+
+  return dst;
+}
+
+
+static
+void sm_cb_mac(sm_ag_if_rd_t const* rd)
+{
+  assert(rd != NULL);
+  assert(rd->type ==INDICATION_MSG_AGENT_IF_ANS_V0);
+  assert(rd->ind.type == MAC_STATS_V0);
+ 
+  // int64_t now = time_now_us();
+  uint32_t ue_rnti = rd->ind.mac.msg.ue_stats->rnti;
+  if (!lookup_ue(UEs_list,UEs_list_len,ue_rnti)){
+    printf("NEW UE REGISTRED - RNTI : %x \n",ue_rnti);
+    UEs_list[UEs_list_len] = ue_rnti;
+    UEs_list_len ++;
+  }
+//   printf("dl_mcs1 = %d \n", rd->ind.mac.msg.ue_stats->dl_mcs1);
+
+}
+
+
+int main(int argc, char *argv[])
+{
+  fr_args_t args = init_fr_args(argc, argv);
+
+  //Init the xApp
+  init_xapp_api(&args);
+  sleep(1);
+
+  e2_node_arr_t nodes = e2_nodes_xapp_api();
+  defer({ free_e2_node_arr(&nodes); });
+
+  assert(nodes.len > 0);
+
+  printf("Connected E2 nodes = %d\n", nodes.len);
+
+  // MAC indication
+  const char* i_0 = "5_ms";
+  sm_ans_xapp_t* mac_handle = NULL;
+
+  if(nodes.len > 0){
+    mac_handle = calloc( nodes.len, sizeof(sm_ans_xapp_t) ); 
+    assert(mac_handle  != NULL);
+  }
+
+  for (int i = 0; i < nodes.len; i++) {
+    e2_node_connected_t* n = &nodes.n[i];
+    for (size_t j = 0; j < n->len_rf; j++)
+      printf("Registered node %d ran func id = %d \n ", i, n->ack_rf[j].id);
+
+    mac_handle[i] = report_sm_xapp_api(&nodes.n[i].id, 142, (void*)i_0, sm_cb_mac);
+    assert(mac_handle[i].success == true);
+
+  }
+  sleep(5);
+
+  // calculating the needed PRBs to achieve the throughput
+
+    unsigned long int thoughput = 50000000  ;
+    uint32_t required_prb = 5 ;
+
+    if (argc > 1){
+    thoughput = (unsigned long int) atoi(argv[1]);
+    printf("\n--------   Needed approximate thoughput is : %ld  \n",thoughput);
+
+    required_prb = nr_compute_nb_rb_needed_to_achive_throughput(thoughput,current_mcs);
+
+    printf("\n--------   Approximate PRBS needed is : %u \n",required_prb);
+
+    }
+    uint32_t rnti = 0x6969;
+
+    // RC Control 
+
+    rc_ctrl_req_data_t rc_ctrl = {0};
+    defer({ free_rc_ctrl_req_data(&rc_ctrl); });
+
+    rc_ctrl.hdr = gen_rc_ctrl_hdr();
+    rc_ctrl.msg = gen_rc_ctrl_msg(rnti,required_prb);
+
+    const int RC_ran_function = 3;
+
+    for(size_t i =0; i < nodes.len; ++i){ 
+        control_sm_xapp_api(&nodes.n[i].id, RC_ran_function, &rc_ctrl);
+    }
+
+  sleep(5);
+
+
+  for(int i = 0; i < nodes.len; ++i){
+    // Remove the handle previously returned
+    rm_report_sm_xapp_api(mac_handle[i].u.handle);
+  }
+
+  if(nodes.len > 0){
+    free(mac_handle);
+  }
+  printf("Stopping the xApp\n");
+
+  //Stop the xApp
+  while(try_stop_xapp_api() == false)
+    usleep(1000);
+
+  printf("Test xApp run SUCCESSFULLY\n");
+}
+
+
+

@@ -3,7 +3,11 @@
 #include <stdio.h>
 #include <math.h>
 
-
+#define  NB_DMRS_PRB   12;
+#define  NB_SYMB_SCH   13;
+#define  NR_RB_OH  0;
+#define TB_SCALING   0;
+#define NL  1;
 
 
 
@@ -177,7 +181,7 @@ uint16_t nr_compute_nb_rb_from_tbs(uint32_t tbs,
                                     uint8_t tb_scaling,
                                     uint8_t Nl)
 {
-    uint16_t nb_rb_max = 500;
+    uint16_t nb_rb_max = 5000;
     uint16_t nb_rb_min = 5;
 
     uint16_t hi = nb_rb_max;
@@ -190,7 +194,7 @@ uint16_t nr_compute_nb_rb_from_tbs(uint32_t tbs,
         break;
 
         const uint32_t TBS = nr_compute_tbs(Qm, R, p, nb_symb_sch, nb_dmrs_prb, 0, 0, Nl) ;
-        printf("\nTBS tmp is %u",TBS);
+        // printf("\nTBS tmp is %u",TBS);
         if (TBS == tbs) {
             hi = p;
             break;
@@ -202,4 +206,39 @@ uint16_t nr_compute_nb_rb_from_tbs(uint32_t tbs,
     }
     nb_rb = hi;
     return nb_rb;
+}
+
+
+uint32_t nr_compute_nb_rb_needed_to_achive_throughput(uint32_t required_throughput, uint32_t mcs){
+
+
+    // initialize  the required throughput in MBits/s 
+
+
+  // uint32_t required_throughput = 50000000; // 50MBits/s
+
+  // in one sec we have 100 frames 
+  // in each slot we have 10 subframes 
+  // in each subframe we have 2 slots because we are using numerology 1
+
+  uint32_t tbs = (uint32_t)(required_throughput / 2000) ; 
+
+
+  uint16_t nb_symb_sch  = NB_SYMB_SCH;
+  uint16_t nb_dmrs_prb  = NB_DMRS_PRB;
+  uint16_t nb_rb_oh  = NR_RB_OH;
+  uint8_t tb_scaling  = TB_SCALING;
+  uint8_t Nl = NL;
+
+  // calculating parameters : 
+
+  uint32_t Qm = nr_get_Qm_dl(mcs, 1);
+  uint32_t R = nr_get_code_rate_dl(mcs, 1);
+
+  uint16_t nb_prb ;
+
+  nb_prb = nr_compute_nb_rb_from_tbs(tbs,Qm,R,nb_symb_sch,nb_dmrs_prb,nb_rb_oh,tb_scaling,Nl);
+
+  return nb_prb; 
+
 }

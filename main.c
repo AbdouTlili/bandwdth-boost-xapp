@@ -5,7 +5,21 @@
 int main(){
 
 
-    
+
+
+
+    // initialize  the required throughput in MBits/s 
+
+
+    uint32_t required_throughput = 50000000; // 50MBits/s
+
+    // in one sec we have 100 frames 
+    // in each slot we have 10 subframes 
+    // in each subframe we have 2 slots because we are using numerology 1
+
+    uint32_t tbs = (uint32_t)(required_throughput / 2000) ; 
+
+    // calculating parameters : 
 
     uint16_t Qm = 6;
     uint16_t R  = 438;
@@ -16,20 +30,32 @@ int main(){
     uint8_t tb_scaling  = 0;
     uint8_t Nl = 1;
 
-
-    // Qm = nr_get_Qm_dl(sched_pdsch->mcs, dl_bwp->mcsTableIdx);
-    // R = nr_get_code_rate_dl(sched_pdsch->mcs, dl_bwp->mcsTableIdx);
-
-    uint16_t tmp_tbs,nb_prb ;
+    uint8_t mcs = 9 ;
 
 
-    tmp_tbs = nr_compute_tbs(Qm,R,nb_rb,nb_symb_sch,nb_dmrs_prb,nb_rb_oh,tb_scaling,Nl);
+    Qm = nr_get_Qm_dl(mcs, 1);
+    R = nr_get_code_rate_dl(mcs, 1);
 
-    printf("\nTBS : %u",tmp_tbs);
+    uint16_t tmp_tbs,nb_prb,nb_rb2 ;
 
-    nb_prb = nr_compute_nb_rb_from_tbs(tmp_tbs,Qm,R,nb_symb_sch,nb_dmrs_prb,nb_rb_oh,tb_scaling,Nl);
 
-    printf("\nnb_prb : %u",nb_prb);
+
+
+
+    printf("\nTBS : %u",tbs);
+    // / Testing TBS ---> TBS
+    nb_prb = nr_compute_nb_rb_from_tbs(tbs,Qm,R,nb_symb_sch,nb_dmrs_prb,nb_rb_oh,tb_scaling,Nl);
+
+    printf("\n to achieve a %u Bits Per Second in MCS : %u we need nb_prb : %u",required_throughput,mcs,nb_prb);
+
+
+    // // # testing nb_rb   ->>>> TBS 
+    // nb_prb = nb_prb;
+    // tmp_tbs = nr_compute_tbs(Qm,R,nb_prb,nb_symb_sch,nb_dmrs_prb,nb_rb_oh,tb_scaling,Nl);
+    // printf("\ncalculated tbs is : %u",tmp_tbs);
     
+
+    nb_rb2 = nr_compute_nb_rb_needed_to_achive_throughput(100000000,9);
+    printf("\n to achieve a %u Bits Per Second in MCS : %u we need nb_prb : %u",100000000,9,nb_rb2);
 
 }

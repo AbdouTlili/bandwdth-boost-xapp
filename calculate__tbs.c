@@ -217,7 +217,7 @@ uint16_t nr_compute_nb_rb_from_tbs(uint32_t tbs,
         break;
 
         const uint32_t TBS = nr_compute_tbs(Qm, R, p, nb_symb_sch, nb_dmrs_prb, 0, 0, Nl) ;
-        printf("\nTBS tmp is %u",TBS);
+        // printf("\nTBS tmp is %u",TBS);
         if (TBS == tbs) {
             hi = p;
             break;

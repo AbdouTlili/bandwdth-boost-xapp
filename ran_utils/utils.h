@@ -22,6 +22,7 @@ uint32_t nr_compute_tbs(uint16_t Qm,
 
 
 uint32_t nr_get_code_rate_dl(uint8_t Imcs, uint8_t table_idx);
+uint8_t nr_get_Qm_dl(uint8_t Imcs, uint8_t table_idx) ;
 
 uint16_t nr_compute_nb_rb_from_tbs(uint32_t tbs,
                                     uint16_t Qm,
@@ -32,3 +33,5 @@ uint16_t nr_compute_nb_rb_from_tbs(uint32_t tbs,
                                     uint8_t tb_scaling,
                                     uint8_t Nl);
 
+
+uint32_t nr_compute_nb_rb_needed_to_achive_throughput(uint32_t throughput, uint32_t mcs);
